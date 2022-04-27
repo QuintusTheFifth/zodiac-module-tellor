@@ -9,19 +9,19 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deploy } = deployments;
   const args = [FIRST_ADDRESS, FIRST_ADDRESS, FIRST_ADDRESS, FIRST_ADDRESS, 1, 0, 60, 0, 0, FIRST_ADDRESS];
 
-  await deploy("RealityModuleERC20", {
+  await deploy("RealityModule", {
     from: deployer,
     args,
     log: true,
     deterministicDeployment: true,
   });
 
-  await deploy("RealityModuleETH", {
-    from: deployer,
-    args,
-    log: true,
-    deterministicDeployment: true,
-  });
+  // await deploy("RealityModuleETH", {
+  //   from: deployer,
+  //   args,
+  //   log: true,
+  //   deterministicDeployment: true,
+  // });
 };
 
 deploy.tags = ["zodiac-module-reality"];

@@ -3,8 +3,11 @@ pragma solidity >=0.8.0;
 
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "./interfaces/RealitioV3.sol";
+import "usingtellor/contracts/UsingTellor.sol";
 
-abstract contract RealityModule is Module {
+import "hardhat/console.sol";
+
+contract RealityModule is Module, UsingTellor {
     bytes32 public constant INVALIDATED =
         0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
@@ -49,7 +52,6 @@ abstract contract RealityModule is Module {
     /// @param _owner Address of the owner
     /// @param _avatar Address of the avatar (e.g. a Safe)
     /// @param _target Address of the contract that will call exec function
-    /// @param _oracle Address of the oracle (e.g. Realitio)
     /// @param timeout Timeout in seconds that should be required for the oracle
     /// @param cooldown Cooldown in seconds that should be required after a oracle provided answer
     /// @param expiration Duration that a positive answer of the oracle is valid in seconds (or 0 if valid forever)
@@ -61,19 +63,19 @@ abstract contract RealityModule is Module {
         address _owner,
         address _avatar,
         address _target,
-        RealitioV3 _oracle,
+        // RealitioV3 _oracle,
+        address payable _tellorAddress,
         uint32 timeout,
         uint32 cooldown,
         uint32 expiration,
         uint256 bond,
         uint256 templateId,
         address arbitrator
-    ) {
+    ) UsingTellor(_tellorAddress) {
         bytes memory initParams = abi.encode(
             _owner,
             _avatar,
             _target,
-            _oracle,
             timeout,
             cooldown,
             expiration,
@@ -89,7 +91,6 @@ abstract contract RealityModule is Module {
             address _owner,
             address _avatar,
             address _target,
-            RealitioV3 _oracle,
             uint32 timeout,
             uint32 cooldown,
             uint32 expiration,
@@ -102,7 +103,6 @@ abstract contract RealityModule is Module {
                     address,
                     address,
                     address,
-                    RealitioV3,
                     uint32,
                     uint32,
                     uint32,
@@ -121,7 +121,6 @@ abstract contract RealityModule is Module {
         );
         avatar = _avatar;
         target = _target;
-        oracle = _oracle;
         answerExpiration = expiration;
         questionTimeout = timeout;
         questionCooldown = cooldown;
@@ -214,13 +213,17 @@ abstract contract RealityModule is Module {
             // Previous nonce must have been invalidated by the oracle.
             // However, if the proposal was internally invalidated, it should not be possible to ask it again.
             bytes32 currentQuestionId = questionIds[questionHash];
+               (bool _ifRetrieve, , ) = getDataBefore(
+                currentQuestionId,
+                block.timestamp - 1 hours
+            );
             require(
                 currentQuestionId != INVALIDATED,
                 "This proposal has been marked as invalid"
             );
             require(
-                oracle.resultFor(currentQuestionId) == INVALIDATED,
-                "Previous proposal was not invalidated"
+                _ifRetrieve,
+                "Data not retrieved"
             );
         } else {
             require(
@@ -228,18 +231,18 @@ abstract contract RealityModule is Module {
                 "Proposal has already been submitted"
             );
         }
-        bytes32 expectedQuestionId = getQuestionId(question, nonce);
+        bytes32 expectedQuestionId = getQuestionId(proposalId);
         // Set the question hash for this question id
         questionIds[questionHash] = expectedQuestionId;
-        bytes32 questionId = askQuestion(question, nonce);
-        require(expectedQuestionId == questionId, "Unexpected question id");
-        emit ProposalQuestionCreated(questionId, proposalId);
+        // bytes32 questionId = askQuestion(question, nonce);
+        // require(expectedQuestionId == questionId, "Unexpected question id");
+        emit ProposalQuestionCreated(expectedQuestionId, proposalId);
     }
 
-    function askQuestion(string memory question, uint256 nonce)
-        internal
-        virtual
-        returns (bytes32);
+    // function askQuestion(string memory question, uint256 nonce)
+    //     internal
+    //     virtual
+    //     returns (bytes32);
 
     /// @dev Marks a proposal as invalid, preventing execution of the connected transactions
     /// @param proposalId Id that should identify the proposal uniquely
@@ -277,15 +280,23 @@ abstract contract RealityModule is Module {
             questionId != bytes32(0),
             "No question id set for provided proposal"
         );
-        require(
-            oracle.resultFor(questionId) == bytes32(uint256(1)),
-            "Only positive answers can expire"
+        (bool _ifRetrieve, , ) = getDataBefore(
+            questionId,
+            block.timestamp - expirationDuration
         );
-        uint32 finalizeTs = oracle.getFinalizeTS(questionId);
+
+        console.log("expiration: %s",expirationDuration);
+        console.log("ifRetrieve: %s",_ifRetrieve);
+
         require(
-            finalizeTs + uint256(expirationDuration) < block.timestamp,
-            "Answer has not expired yet"
+            _ifRetrieve,
+            "Data not retrieved"
         );
+        // uint256 finalizeTs = getTimestampbyQueryIdandIndex(questionId, getNewValueCountbyQueryId(questionId)-1);
+        // require(
+        //     finalizeTs + uint256(expirationDuration) < block.timestamp,
+        //     "Answer has not expired yet"
+        // );
         questionIds[questionHash] = INVALIDATED;
     }
 
@@ -412,27 +423,39 @@ abstract contract RealityModule is Module {
 
     /// @dev Generate the question id.
     /// @notice It is required that this is the same as for the oracle implementation used.
-    function getQuestionId(string memory question, uint256 nonce)
+    // function getQuestionId(string memory question, uint256 nonce)
+    //     public
+    //     view
+    //     returns (bytes32)
+    // {
+    //     // Ask the question with a starting time of 0, so that it can be immediately answered
+    //     bytes32 contentHash = keccak256(
+    //         abi.encodePacked(template, uint32(0), question)
+    //     );
+    //     return
+    //         keccak256(
+    //             abi.encodePacked(
+    //                 contentHash,
+    //                 questionArbitrator,
+    //                 questionTimeout,
+    //                 minimumBond,
+    //                 oracle,
+    //                 this,
+    //                 nonce
+    //             )
+    //         );
+    // }
+        /// @dev Generate the question id.
+    /// @notice It is required that this is the same as for the oracle implementation used.
+    function getQuestionId(string memory _proposalId)
         public
-        view
+        pure
         returns (bytes32)
     {
-        // Ask the question with a starting time of 0, so that it can be immediately answered
-        bytes32 contentHash = keccak256(
-            abi.encodePacked(template, uint32(0), question)
+        bytes32 questionId = keccak256(
+            abi.encode("Snapshot", abi.encode(_proposalId))
         );
-        return
-            keccak256(
-                abi.encodePacked(
-                    contentHash,
-                    questionArbitrator,
-                    questionTimeout,
-                    minimumBond,
-                    oracle,
-                    this,
-                    nonce
-                )
-            );
+        return questionId;
     }
 
     /// @dev Returns the chain id used by this contract.

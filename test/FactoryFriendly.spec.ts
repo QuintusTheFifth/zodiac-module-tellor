@@ -19,7 +19,6 @@ describe("Module works with factory", () => {
     "address",
     "address",
     "address",
-    "address",
     "uint32",
     "uint32",
     "uint32",
@@ -31,10 +30,10 @@ describe("Module works with factory", () => {
   const baseSetup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Factory = await hre.ethers.getContractFactory("ModuleProxyFactory");
-    const RealityModuleETH = await hre.ethers.getContractFactory("RealityModuleETH");
+    const RealityModule = await hre.ethers.getContractFactory("RealityModule");
     const factory = await Factory.deploy();
 
-    const masterCopy = await RealityModuleETH.deploy(
+    const masterCopy = await RealityModule.deploy(
       FIRST_ADDRESS,
       FIRST_ADDRESS,
       FIRST_ADDRESS,
@@ -58,7 +57,6 @@ describe("Module works with factory", () => {
       safe.address,
       safe.address,
       safe.address,
-      oracle.address,
       timeout,
       cooldown,
       expiration,
@@ -79,7 +77,6 @@ describe("Module works with factory", () => {
       safe.address,
       safe.address,
       safe.address,
-      oracle.address,
       timeout,
       cooldown,
       expiration,
@@ -104,7 +101,7 @@ describe("Module works with factory", () => {
     );
 
     const newProxy = await hre.ethers.getContractAt(
-      "RealityModuleETH",
+      "RealityModule",
       newProxyAddress
     );
     expect(await newProxy.questionTimeout()).to.be.eq(timeout);
