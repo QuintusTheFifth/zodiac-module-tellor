@@ -205,7 +205,7 @@ contract RealityModule is Module, UsingTellor {
         string memory proposalId,
         bytes32[] memory txHashes,
         uint256 nonce
-    ) internal {
+    ) public {
         // We generate the question string used for the oracle
         string memory question = buildQuestion(proposalId, txHashes);
         bytes32 questionHash = keccak256(bytes(question));
